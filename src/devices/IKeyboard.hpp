@@ -83,6 +83,9 @@ class IKeyboard : public IHID {
 
     bool                              m_active     = false;
     bool                              m_enabled    = true;
+    // Order of the last key press this keyboard produced (0 = none yet). When the seat keyboard goes away,
+    // the seat falls back to the enabled keyboard a key was most recently pressed on.
+    uint64_t                          m_lastKeyPressOrder = 0;
     bool                              m_allowBinds = true;
 
     // permission flag: whether this keyboard is allowed to be processed

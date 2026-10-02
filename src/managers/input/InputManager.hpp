@@ -190,6 +190,7 @@ class CInputManager {
     // for shared mods
     const std::vector<uint32_t>& getKeysFromAllKBs();
     uint32_t                     getModsFromAllKBs();
+    uint32_t                     shareModsFromAllKBs(uint32_t depressed);
 
     // for virtual keyboards: whether we should respect them as normal ones
     bool        shouldIgnoreVirtualKeyboard(SP<IKeyboard>);
@@ -252,6 +253,11 @@ class CInputManager {
     SP<CTabletTool>    ensureTabletToolPresent(SP<Aquamarine::ITabletTool>);
 
     void               applyConfigToKeyboard(SP<IKeyboard>);
+    SP<IKeyboard>      nextSeatKeyboard();
+    // Set while a keyboard is being configured: modifier changes that configuration causes (numlock_by_default)
+    // are not input; they do not take the seat or an input method grab away from a usable keyboard (see
+    // onKeyboardMod).
+    bool               m_configuringKeyboard = false;
 
     // this will be set after a refocus()
     WP<CWLSurfaceResource> m_foundSurfaceToFocus;
@@ -301,7 +307,6 @@ class CInputManager {
     bool                  m_pointerAxisFramePending = false;
 
     bool                  shareKeyFromAllKBs(uint32_t key, bool pressed);
-    uint32_t              shareModsFromAllKBs(uint32_t depressed);
     std::vector<uint32_t> m_pressed;
     uint32_t              m_lastMods = 0;
 
