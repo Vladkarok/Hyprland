@@ -8,6 +8,7 @@
 #include "../protocols/LayerShell.hpp"
 #include "../protocols/InputCapture.hpp"
 #include "../protocols/PointerConstraints.hpp"
+#include "../protocols/InputMethodV2.hpp"
 #include "../Compositor.hpp"
 #include "../desktop/state/FocusState.hpp"
 #include "../devices/IKeyboard.hpp"
@@ -228,6 +229,42 @@ void CSeatManager::setKeyboard(SP<IKeyboard> KEEB) {
         KEEB->m_active = true;
 
     updateActiveKeyboardData();
+
+    // The client keeps the previous keyboard's layout group and locks otherwise (and loses them entirely when a
+    // new keymap was just sent): the keyboard that changed may be on another group even with an identical keymap.
+    sendSeatKeyboardModifiers();
+}
+
+void CSeatManager::sendSeatKeyboardModifiers() {
+    static auto PCAPTUREMODS = CConfigValue<Config::INTEGER>("input-capture:capture_modifiers");
+
+    if (!m_keyboard)
+        return;
+
+    // The same routing and state as a modifier event from the seat keyboard (CInputManager::onKeyboardMod):
+    // nothing while input capture takes modifiers or while an input method grabs the keyboard (unless the seat
+    // keyboard is the input method's own), and the seat keyboard's latched and locked modifiers and group with
+    // the depressed modifiers of every keyboard sharing state (an input method's own keyboard: unmerged).
+    if (*PCAPTUREMODS && PROTO::inputCapture->isCaptured())
+        return;
+
+    const auto KEYBOARD = m_keyboard.lock();
+
+    // A disabled keyboard's modifier events are ignored (onKeyboardMod); so is its state.
+    if (!KEYBOARD->m_enabled)
+        return;
+
+    const bool IMEKEYBOARD = KEYBOARD->isVirtual() && g_pInputManager->shouldIgnoreVirtualKeyboard(KEYBOARD);
+    const auto IME         = g_pInputManager->m_relay.m_inputMethod.lock();
+
+    if (IME && IME->hasGrab() && !IMEKEYBOARD)
+        return;
+
+    auto MODS = KEYBOARD->m_modifiersState;
+    if (!IMEKEYBOARD)
+        MODS.depressed |= g_pInputManager->hyprlandModsToXkb(KEYBOARD, g_pInputManager->shareModsFromAllKBs(g_pInputManager->xkbModsToHyprland(KEYBOARD, MODS.depressed)));
+
+    sendKeyboardMods(MODS.depressed, MODS.latched, MODS.locked, MODS.group);
 }
 
 void CSeatManager::updateActiveKeyboardData() {

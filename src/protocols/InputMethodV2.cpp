@@ -56,6 +56,10 @@ void CInputMethodKeyboardGrabV2::sendKeyboardData(SP<IKeyboard> keyboard) {
     m_resource->sendRepeatInfo(keyboard->m_repeatRate, keyboard->m_repeatDelay);
 }
 
+SP<IKeyboard> CInputMethodKeyboardGrabV2::followedKeyboard() {
+    return m_lastKeyboard.lock();
+}
+
 void CInputMethodKeyboardGrabV2::sendKey(uint32_t time, uint32_t key, wl_keyboard_key_state state) {
     const auto SERIAL = g_pSeatManager->nextSerial(g_pSeatManager->seatResourceForClient(m_resource->client()));
 
@@ -321,6 +325,15 @@ void CInputMethodV2::setKeyboard(SP<IKeyboard> keyboard) {
             continue;
 
         g->sendKeyboardData(keyboard);
+    }
+}
+
+void CInputMethodV2::forEachGrab(const std::function<void(SP<CInputMethodKeyboardGrabV2>)>& fn) {
+    for (auto const& gw : m_grabs) {
+        auto g = gw.lock();
+
+        if (g)
+            fn(g);
     }
 }
 

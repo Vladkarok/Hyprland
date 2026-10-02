@@ -83,6 +83,8 @@ class CSeatManager {
     void                       setKeyboardFocus(SP<CWLSurfaceResource> surf);
     void                       sendKeyboardKey(uint32_t timeMs, uint32_t key, wl_keyboard_key_state state);
     void                       sendKeyboardMods(uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group);
+    // Sends the focused client the seat keyboard's modifiers and layout group, as a modifier event from it would.
+    void                       sendSeatKeyboardModifiers();
 
     CKeyboardEventHandlerStack m_keyboardEventHandlers;
 
