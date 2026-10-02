@@ -1181,6 +1181,76 @@ static SDispatchResult setMods(std::string in) {
     return {};
 }
 
+// Keyboards by slot: 0 and 1 are the two created at plugin init, 2.. are created and destroyed by tests.
+static std::array<SP<CTestKeyboard>, 6> g_extraKeyboards;
+
+static SP<CTestKeyboard>                keyboardInSlot(int slot) {
+    if (slot == 0)
+        return g_keyboard;
+    if (slot == 1)
+        return g_keyboard2;
+    if (slot >= 2 && slot < sc<int>(g_extraKeyboards.size()))
+        return g_extraKeyboards[slot];
+    return nullptr;
+}
+
+static SDispatchResult kbCreate(int slot, bool isVirtual) {
+    if (slot < 2 || slot >= sc<int>(g_extraKeyboards.size()) || g_extraKeyboards[slot])
+        return {.success = false, .error = "bad or busy slot"};
+    g_extraKeyboards[slot] = CTestKeyboard::create(isVirtual);
+    g_pInputManager->newKeyboard(g_extraKeyboards[slot]);
+    return {};
+}
+
+static SDispatchResult kbDestroy(int slot) {
+    if (slot < 2 || slot >= sc<int>(g_extraKeyboards.size()) || !g_extraKeyboards[slot])
+        return {.success = false, .error = "bad or empty slot"};
+    g_extraKeyboards[slot]->destroy();
+    g_extraKeyboards[slot].reset();
+    return {};
+}
+
+static SDispatchResult kbKey(int slot, uint32_t key) {
+    const auto KB = keyboardInSlot(slot);
+    if (!KB)
+        return {.success = false, .error = "no keyboard in slot"};
+    KB->sendKey(key, true);
+    KB->sendKey(key, false);
+    return {};
+}
+
+static SDispatchResult kbMods(int slot, uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group) {
+    const auto KB = keyboardInSlot(slot);
+    if (!KB)
+        return {.success = false, .error = "no keyboard in slot"};
+    KB->setMods(depressed, latched, locked, group);
+    return {};
+}
+
+static SDispatchResult kbEnable(int slot, bool enabled) {
+    const auto KB = keyboardInSlot(slot);
+    if (!KB)
+        return {.success = false, .error = "no keyboard in slot"};
+    KB->m_enabled = enabled;
+    return {};
+}
+
+// The seat keyboard is the one in `slot`, and it is the only keyboard marked active (hyprctl devices "main").
+static SDispatchResult expectSeatKeyboard(int slot) {
+    const auto KB = keyboardInSlot(slot);
+    if (!KB)
+        return {.success = false, .error = "no keyboard in slot"};
+    if (g_pSeatManager->m_keyboard.get() != KB.get())
+        return {.success = false, .error = std::format("seat keyboard is not slot {}", slot)};
+    for (auto const& k : g_pInputManager->m_keyboards) {
+        if (k.get() == KB.get() && !k->m_active)
+            return {.success = false, .error = "seat keyboard is not marked active"};
+        if (k.get() != KB.get() && k->m_active)
+            return {.success = false, .error = std::format("another keyboard ({}) is marked active", k->m_hlName)};
+    }
+    return {};
+}
+
 static SDispatchResult nullfocus(std::string in) {
     g_pSeatManager->setKeyboardFocus(nullptr);
     return {};
@@ -1611,6 +1681,32 @@ static int luaExpectKeyboardEvents(lua_State* L) {
     return luaResult(L, ::expectKeyboardEvents(expected));
 }
 
+static int luaKbCreate(lua_State* L) {
+    return luaResult(L, ::kbCreate(sc<int>(luaL_checkinteger(L, 1)), lua_toboolean(L, 2)));
+}
+
+static int luaKbDestroy(lua_State* L) {
+    return luaResult(L, ::kbDestroy(sc<int>(luaL_checkinteger(L, 1))));
+}
+
+static int luaKbKey(lua_State* L) {
+    return luaResult(L, ::kbKey(sc<int>(luaL_checkinteger(L, 1)), sc<uint32_t>(luaL_checkinteger(L, 2))));
+}
+
+static int luaKbMods(lua_State* L) {
+    return luaResult(L,
+                     ::kbMods(sc<int>(luaL_checkinteger(L, 1)), sc<uint32_t>(luaL_checkinteger(L, 2)), sc<uint32_t>(luaL_checkinteger(L, 3)), sc<uint32_t>(luaL_checkinteger(L, 4)),
+                              sc<uint32_t>(luaL_checkinteger(L, 5))));
+}
+
+static int luaKbEnable(lua_State* L) {
+    return luaResult(L, ::kbEnable(sc<int>(luaL_checkinteger(L, 1)), lua_toboolean(L, 2)));
+}
+
+static int luaExpectSeatKeyboard(lua_State* L) {
+    return luaResult(L, ::expectSeatKeyboard(sc<int>(luaL_checkinteger(L, 1))));
+}
+
 static int luaNullfocus(lua_State* L) {
     return luaResult(L, ::nullfocus(""));
 }
@@ -1706,6 +1802,12 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     addLuaFn("remove_keyboard_event_recorder", ::luaRemoveKeyboardEventRecorder);
     addLuaFn("expect_keyboard_events", ::luaExpectKeyboardEvents);
     addLuaFn("nullfocus", ::luaNullfocus);
+    addLuaFn("kb_create", ::luaKbCreate);
+    addLuaFn("kb_destroy", ::luaKbDestroy);
+    addLuaFn("kb_key", ::luaKbKey);
+    addLuaFn("kb_mods", ::luaKbMods);
+    addLuaFn("kb_enable", ::luaKbEnable);
+    addLuaFn("expect_seat_keyboard", ::luaExpectSeatKeyboard);
     addLuaFn("clear_surface_focus", ::luaClearSurfaceFocus);
     addLuaFn("check_keyboard_focus_window", ::luaCheckKeyboardFocusWindow);
     addLuaFn("add_window_rule", ::luaAddWindowRule);
@@ -1745,6 +1847,11 @@ APICALL EXPORT void PLUGIN_EXIT() {
     g_monitorRenderRecording.reset();
     removeKeyboardEventRecorder("");
     g_keyboardEventRecorder.reset();
+    for (auto& kb : g_extraKeyboards) {
+        if (kb)
+            kb->destroy();
+        kb.reset();
+    }
     g_mouse->destroy();
     g_mouse.reset();
     g_keyboard->destroy();

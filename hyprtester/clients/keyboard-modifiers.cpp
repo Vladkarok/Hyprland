@@ -42,6 +42,8 @@ struct SWlState {
 
     CSharedPointer<CCWlKeyboard>   keyboard;
     uint32_t                       lastLocked = 0;
+    uint32_t                       lastGroup     = 0;
+    uint32_t                       lastDepressed = 0;
 };
 
 static std::ofstream logfile;
@@ -209,6 +211,8 @@ static bool setupSeat(SWlState& state) {
     state.keyboard->setModifiers([&](CCWlKeyboard* p, uint32_t serial, uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group) {
         debugLog("modifiers: depressed={} latched={} locked={} group={}", depressed, latched, locked, group);
         state.lastLocked = locked;
+        state.lastGroup     = group;
+        state.lastDepressed = depressed;
     });
 
     state.keyboard->setKey([&](CCWlKeyboard* p, uint32_t serial, uint32_t time, uint32_t key, uint32_t state) { debugLog("Got key event: key={} state={}", key, state); });
@@ -217,7 +221,11 @@ static bool setupSeat(SWlState& state) {
 }
 
 static void parseRequest(SWlState& state, std::string req) {
-    if (req.starts_with("get"))
+    if (req.starts_with("depressed"))
+        clientLog("{}", state.lastDepressed);
+    else if (req.starts_with("group"))
+        clientLog("{}", state.lastGroup);
+    else if (req.starts_with("get"))
         clientLog("{}", state.lastLocked);
     else if (req.starts_with("exit"))
         shouldExit = true;
