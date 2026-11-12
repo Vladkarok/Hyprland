@@ -146,6 +146,10 @@ void IKeyboard::setKeymap(const SStringRuleNames& rules) {
     xkb_context_unref(CONTEXT);
 
     g_pSeatManager->updateActiveKeyboardData();
+
+    // The seat keyboard's new keymap resets the focused client's xkb state: tell it the modifiers again.
+    if (g_pSeatManager->m_keyboard == m_self)
+        g_pSeatManager->sendSeatKeyboardModifiers();
 }
 
 void IKeyboard::updateKeymapFD() {

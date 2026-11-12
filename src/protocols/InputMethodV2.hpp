@@ -60,6 +60,7 @@ class CInputMethodV2 {
     void       sendKey(uint32_t time, uint32_t key, wl_keyboard_key_state state);
     void       sendMods(uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group);
     void       setKeyboard(SP<IKeyboard> keyboard);
+    void       forEachGrab(const std::function<void(SP<CInputMethodKeyboardGrabV2>)>& fn);
 
     wl_client* client();
     wl_client* grabClient();
@@ -92,6 +93,7 @@ class CInputMethodKeyboardGrabV2 {
     void               sendKey(uint32_t time, uint32_t key, wl_keyboard_key_state state);
     void               sendMods(uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group);
     void               sendKeyboardData(SP<IKeyboard> keyboard);
+    SP<IKeyboard>      followedKeyboard(); // the keyboard whose keymap and modifiers this grab was last given
 
   private:
     SP<CZwpInputMethodKeyboardGrabV2> m_resource;

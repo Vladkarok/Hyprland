@@ -211,6 +211,8 @@ class CInputManager {
     // for shared mods
     const std::vector<uint32_t>& getKeysFromAllKBs();
     Input::ModifierMask          getModsFromAllKBs();
+    // relative's depressed xkb modifiers merged with those of every keyboard sharing state, as onKeyboardMod sends
+    uint32_t                     shareXkbModsFromAllKBs(SP<IKeyboard> relative, uint32_t depressed);
     Input::ModifierMask          xkbModsToHyprland(SP<IKeyboard> relative, uint32_t mask);
     uint32_t                     hyprlandModsToXkb(SP<IKeyboard> relative, Input::ModifierMask mask);
 
@@ -277,6 +279,11 @@ class CInputManager {
     SP<CTabletTool>    ensureTabletToolPresent(SP<Aquamarine::ITabletTool>);
 
     void               applyConfigToKeyboard(SP<IKeyboard>);
+    SP<IKeyboard>      nextSeatKeyboard();
+    // Set while a keyboard is being configured: modifier changes that configuration causes (numlock_by_default)
+    // are not input; they do not take the seat or an input method grab away from a usable keyboard (see
+    // onKeyboardMod).
+    bool               m_configuringKeyboard = false;
 
     // this will be set after a refocus()
     WP<CWLSurfaceResource> m_foundSurfaceToFocus;
